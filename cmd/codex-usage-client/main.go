@@ -6,8 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 
 	"codex-usage-tracker/internal/client"
@@ -30,8 +33,10 @@ func run(args []string) error {
 		return initCommand(args[1:])
 	case "run":
 		return runCommand(args[1:])
-	case "install-service", "uninstall-service":
-		return fmt.Errorf("%s is not implemented yet", args[0])
+	case "install-service":
+		return installServiceCommand(args[1:])
+	case "uninstall-service":
+		return uninstallServiceCommand(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -113,6 +118,83 @@ func runCommand(args []string) error {
 	return err
 }
 
+const (
+	serviceName  = "codex-usage-client"
+	launchdLabel = "com.codex-usage-client"
+)
+
+func installServiceCommand(args []string) error {
+	fs := flag.NewFlagSet("install-service", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	configPath := fs.String("config", "", "config path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *configPath == "" {
+		return errors.New("usage: codex-usage-client install-service --config <path>")
+	}
+
+	absConfigPath, err := filepath.Abs(*configPath)
+	if err != nil {
+		return err
+	}
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return err
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		plistPath, err := launchdPlistPath()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
+			return err
+		}
+		plist := client.LaunchdPlist(exePath, absConfigPath, launchdLabel)
+		if err := os.WriteFile(plistPath, []byte(plist), 0o644); err != nil {
+			return err
+		}
+		return runExternal("launchctl", "load", plistPath)
+	case "windows":
+		return runExternal("sc.exe", client.WindowsCreateServiceArgs(exePath, absConfigPath, serviceName)...)
+	default:
+		return fmt.Errorf("install-service is unsupported on %s", runtime.GOOS)
+	}
+}
+
+func uninstallServiceCommand(args []string) error {
+	fs := flag.NewFlagSet("uninstall-service", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	// --config is accepted for command symmetry. macOS uses a fixed LaunchAgents plist path.
+	configPath := fs.String("config", "", "config path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	_ = *configPath
+
+	switch runtime.GOOS {
+	case "darwin":
+		plistPath, err := launchdPlistPath()
+		if err != nil {
+			return err
+		}
+		if err := runExternal("launchctl", "unload", plistPath); err != nil {
+			return err
+		}
+		return os.Remove(plistPath)
+	case "windows":
+		return runExternal("sc.exe", "delete", serviceName)
+	default:
+		return fmt.Errorf("uninstall-service is unsupported on %s", runtime.GOOS)
+	}
+}
+
 func writeExampleConfigIfMissing(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
@@ -137,4 +219,24 @@ func statePathForConfig(configPath string) string {
 
 func queuePathForConfig(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "pending.json")
+}
+
+func launchdPlistPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"), nil
+}
+
+func runExternal(name string, args ...string) error {
+	output, err := exec.Command(name, args...).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	message := strings.TrimSpace(string(output))
+	if message == "" {
+		return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+	}
+	return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, message)
 }
