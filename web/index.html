@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Usage</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d8dde5;
+      --text: #1d2430;
+      --muted: #637083;
+      --accent: #176f7a;
+      --danger: #a84822;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+    }
+    main {
+      padding: 20px 24px 32px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .filters, .metrics, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .filters {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    input, select, button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fff;
+      color: var(--text);
+      padding: 7px 9px;
+      font: inherit;
+    }
+    button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .metrics {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      overflow: hidden;
+    }
+    .metric {
+      padding: 14px 16px;
+      border-right: 1px solid var(--line);
+    }
+    .metric:last-child { border-right: 0; }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin-bottom: 8px;
+    }
+    .metric strong {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    section {
+      margin-top: 16px;
+      overflow: hidden;
+    }
+    .section-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      background: #fafbfc;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .danger { color: var(--danger); }
+    .table-wrap { overflow-x: auto; }
+    @media (max-width: 900px) {
+      header { align-items: flex-start; flex-direction: column; }
+      main { padding: 16px; }
+      .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .metric:nth-child(2) { border-right: 0; }
+      .metric:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Codex Usage</h1>
+    <div class="muted" id="status">Loading</div>
+  </header>
+  <main>
+    <form class="filters" id="filters">
+      <label>Bucket
+        <select name="bucket">
+          <option value="day">Day</option>
+          <option value="hour">Hour</option>
+        </select>
+      </label>
+      <label>Group
+        <select name="group_by">
+          <option value="identity">Identity</option>
+          <option value="device">Device</option>
+          <option value="model">Model</option>
+        </select>
+      </label>
+      <label>Identity
+        <input name="identity_key" placeholder="identity key">
+      </label>
+      <label>Device
+        <input name="device_id" placeholder="device id">
+      </label>
+      <label>Model
+        <input name="model" placeholder="model">
+      </label>
+      <label>From
+        <input name="from" type="datetime-local">
+      </label>
+      <button type="submit">Refresh</button>
+    </form>
+
+    <div class="metrics">
+      <div class="metric"><span>Total tokens</span><strong id="totalTokens">0</strong></div>
+      <div class="metric"><span>Total cost</span><strong id="totalCost">$0.00</strong></div>
+      <div class="metric"><span>Events</span><strong id="eventCount">0</strong></div>
+      <div class="metric"><span>Missing prices</span><strong id="missingPrices">0</strong></div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <h2>Summary Buckets</h2>
+        <span class="muted" id="summaryMeta"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Bucket start</th>
+              <th class="num">Input</th>
+              <th class="num">Cache read</th>
+              <th class="num">Cache create</th>
+              <th class="num">Output</th>
+              <th class="num">Total</th>
+              <th class="num">Cost</th>
+              <th class="num">Events</th>
+            </tr>
+          </thead>
+          <tbody id="summaryRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Breakdown</h2>
+        <span class="muted" id="breakdownMeta"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th class="num">Input</th>
+              <th class="num">Output</th>
+              <th class="num">Total</th>
+              <th class="num">Cost</th>
+              <th class="num">Events</th>
+            </tr>
+          </thead>
+          <tbody id="breakdownRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Recent Events</h2>
+        <span class="muted">Latest 25</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Occurred</th>
+              <th>Identity</th>
+              <th>Device</th>
+              <th>Model</th>
+              <th class="num">Total</th>
+              <th class="num">Cost</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="eventRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const formatter = new Intl.NumberFormat();
+    const money = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 4 });
+    const filters = document.getElementById("filters");
+    const ids = {
+      status: document.getElementById("status"),
+      totalTokens: document.getElementById("totalTokens"),
+      totalCost: document.getElementById("totalCost"),
+      eventCount: document.getElementById("eventCount"),
+      missingPrices: document.getElementById("missingPrices"),
+      summaryMeta: document.getElementById("summaryMeta"),
+      breakdownMeta: document.getElementById("breakdownMeta"),
+      summaryRows: document.getElementById("summaryRows"),
+      breakdownRows: document.getElementById("breakdownRows"),
+      eventRows: document.getElementById("eventRows")
+    };
+
+    function params(extra = {}) {
+      const data = new FormData(filters);
+      const out = new URLSearchParams();
+      for (const [key, value] of data.entries()) {
+        if (!value || key === "group_by") continue;
+        out.set(key, key === "from" ? new Date(value).toISOString() : value);
+      }
+      for (const [key, value] of Object.entries(extra)) out.set(key, value);
+      return out;
+    }
+
+    function n(value) {
+      return formatter.format(value || 0);
+    }
+
+    function c(value) {
+      return value == null ? "missing" : money.format(value);
+    }
+
+    function row(cells) {
+      return `<tr>${cells.map(([value, cls]) => `<td class="${cls || ""}">${value}</td>`).join("")}</tr>`;
+    }
+
+    async function load() {
+      ids.status.textContent = "Loading";
+      const groupBy = new FormData(filters).get("group_by") || "identity";
+      const [summary, breakdown, events] = await Promise.all([
+        fetch(`/api/v1/summary?${params()}`).then(r => r.json()),
+        fetch(`/api/v1/breakdown?${params({ group_by: groupBy })}`).then(r => r.json()),
+        fetch(`/api/v1/events?${params({ limit: 25 })}`).then(r => r.json())
+      ]);
+
+      ids.totalTokens.textContent = n(summary.totals.total_tokens);
+      ids.totalCost.textContent = c(summary.totals.cost_usd);
+      ids.eventCount.textContent = n(summary.totals.event_count);
+      ids.missingPrices.textContent = n(summary.totals.missing_price_count);
+      ids.missingPrices.className = summary.totals.missing_price_count ? "danger" : "";
+      ids.summaryMeta.textContent = `${summary.buckets.length} ${summary.bucket} buckets`;
+      ids.breakdownMeta.textContent = breakdown.group_by;
+
+      ids.summaryRows.innerHTML = summary.buckets.map(item => row([
+        [new Date(item.bucket_start).toLocaleString(), ""],
+        [n(item.input_tokens), "num"],
+        [n(item.cache_read_tokens), "num"],
+        [n(item.cache_creation_tokens), "num"],
+        [n(item.output_tokens), "num"],
+        [n(item.total_tokens), "num"],
+        [c(item.cost_usd), "num"],
+        [n(item.event_count), "num"]
+      ])).join("") || row([["No buckets", "muted"]]);
+
+      ids.breakdownRows.innerHTML = breakdown.items.map(item => row([
+        [item.key, ""],
+        [n(item.input_tokens), "num"],
+        [n(item.output_tokens), "num"],
+        [n(item.total_tokens), "num"],
+        [c(item.cost_usd), "num"],
+        [n(item.event_count), "num"]
+      ])).join("") || row([["No breakdown", "muted"]]);
+
+      ids.eventRows.innerHTML = events.events.map(item => row([
+        [new Date(item.occurred_at).toLocaleString(), ""],
+        [item.identity_key, ""],
+        [item.device_id, ""],
+        [item.model, ""],
+        [n(item.total_tokens), "num"],
+        [c(item.cost_usd), "num"],
+        [item.pricing_status, item.pricing_status === "missing" ? "danger" : ""]
+      ])).join("") || row([["No events", "muted"]]);
+      ids.status.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    }
+
+    filters.addEventListener("submit", event => {
+      event.preventDefault();
+      load().catch(showError);
+    });
+
+    function showError(error) {
+      ids.status.textContent = error.message || String(error);
+    }
+
+    load().catch(showError);
+  </script>
+</body>
+</html>

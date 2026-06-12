@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"codex-usage-tracker/internal/server"
 )
@@ -51,7 +56,9 @@ func run(args []string) error {
 	}
 	defer db.Close()
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	if err := server.Migrate(ctx, db); err != nil {
 		return fmt.Errorf("migrate db: %w", err)
 	}
@@ -59,8 +66,38 @@ func run(args []string) error {
 		return fmt.Errorf("seed model prices: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "codex-usage-server initialized %s; HTTP router is not implemented until Task 8\n", cfg.SQLitePath)
-	return nil
+	usageServer := server.Server{DB: db, APIKey: cfg.APIKey}
+	httpServer := &http.Server{
+		Addr:              cfg.ListenAddr,
+		Handler:           usageServer.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		fmt.Fprintf(os.Stderr, "codex-usage-server listening on %s\n", cfg.ListenAddr)
+		errCh <- httpServer.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		stop()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
+		err := <-errCh
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
 }
 
 func usageError() error {
