@@ -219,7 +219,7 @@ func (s Scanner) usageEventFromRecord(record scannerRecord, cursor FileCursor, p
 		DeviceID:        s.DeviceID,
 		IdentityKey:     s.IdentityKey,
 		SessionID:       cursor.SessionID,
-		Source:          "codex",
+		Source:          "codex_session",
 		Model:           cursor.Model,
 		InputTokens:     input,
 		CacheReadTokens: cacheRead,

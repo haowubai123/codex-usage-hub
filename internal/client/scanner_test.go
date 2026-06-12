@@ -50,8 +50,8 @@ func TestScannerEmitsTokenDeltasAndPersistsCursor(t *testing.T) {
 	if first.SessionID != "session-123" {
 		t.Fatalf("first SessionID = %q, want session-123", first.SessionID)
 	}
-	if first.Source != "codex" {
-		t.Fatalf("first Source = %q, want codex", first.Source)
+	if first.Source != "codex_session" {
+		t.Fatalf("first Source = %q, want codex_session", first.Source)
 	}
 	if first.Model != "gpt-5.2-codex-low" {
 		t.Fatalf("first Model = %q, want gpt-5.2-codex-low", first.Model)
