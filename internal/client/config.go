@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 type ClientConfig struct {
@@ -31,17 +33,14 @@ func DefaultConfigPath(goos string, home string, appData string) string {
 }
 
 func LoadConfig(path string) (ClientConfig, error) {
-	values, err := loadSimpleYAML(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return ClientConfig{}, err
 	}
 
-	cfg := ClientConfig{
-		ServerURL:   values["server_url"],
-		APIKey:      values["api_key"],
-		IdentityKey: values["identity_key"],
-		RawInterval: values["scan_interval"],
-		CodexHome:   values["codex_home"],
+	var cfg ClientConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ClientConfig{}, err
 	}
 	if cfg.RawInterval == "" {
 		cfg.ScanInterval = 5 * time.Minute
@@ -80,44 +79,6 @@ func ValidateConfig(cfg ClientConfig) error {
 		return fmt.Errorf("scan_interval must be positive")
 	}
 	return nil
-}
-
-func loadSimpleYAML(path string) (map[string]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	values := make(map[string]string)
-	lines := strings.Split(string(data), "\n")
-	for lineNumber, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
-			return nil, fmt.Errorf("parse yaml line %d: expected key: value", lineNumber+1)
-		}
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-		if key == "" {
-			return nil, fmt.Errorf("parse yaml line %d: empty key", lineNumber+1)
-		}
-		values[key] = unquoteYAMLScalar(value)
-	}
-	return values, nil
-}
-
-func unquoteYAMLScalar(value string) string {
-	if len(value) < 2 {
-		return value
-	}
-	if (value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'') {
-		return value[1 : len(value)-1]
-	}
-	return value
 }
 
 func separatorForPath(path string) string {
