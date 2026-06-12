@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"time"
 
@@ -81,7 +82,13 @@ func (r Runner) RunForever(ctx context.Context) error {
 
 	for {
 		if err := r.RunOnce(ctx); err != nil {
-			return err
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			var authErr *AuthError
+			if errors.As(err, &authErr) {
+				return err
+			}
 		}
 
 		timer := time.NewTimer(interval)
