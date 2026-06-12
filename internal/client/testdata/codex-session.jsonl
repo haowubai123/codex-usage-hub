@@ -1,0 +1,5 @@
+{"type":"session_meta","payload":{"session_id":"session-123"}}
+{"type":"turn_context","payload":{"model":"OpenAI/GPT-5.2-Codex@low"}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":250,"output_tokens":100}}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":0,"cached_input_tokens":0,"output_tokens":0}}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1600,"cached_input_tokens":300,"output_tokens":220}}}}
