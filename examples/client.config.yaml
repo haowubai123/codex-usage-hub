@@ -1,0 +1,5 @@
+server_url: http://localhost:8080
+api_key: change-me
+identity_key: alice
+scan_interval: 5m
+codex_home: ""
