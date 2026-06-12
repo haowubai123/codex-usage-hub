@@ -296,8 +296,17 @@
       return value == null ? "missing" : money.format(value);
     }
 
+    function esc(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
     function row(cells) {
-      return `<tr>${cells.map(([value, cls]) => `<td class="${cls || ""}">${value}</td>`).join("")}</tr>`;
+      return `<tr>${cells.map(([value, cls]) => `<td class="${cls || ""}">${esc(value)}</td>`).join("")}</tr>`;
     }
 
     async function load() {
