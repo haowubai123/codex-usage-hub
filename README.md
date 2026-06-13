@@ -1,6 +1,6 @@
-# Codex Usage Tracker 使用文档
+# Codex Usage Hub 使用文档
 
-Codex Usage Tracker 用来统计多台设备上的 Codex token 使用量和估算成本。每台电脑运行一个无界面客户端，客户端定时扫描本机 Codex 会话日志，提取 token 记录后上报到服务端；服务端使用 SQLite 存储明细和聚合数据，并提供网页 dashboard 和 JSON API。
+Codex Usage Hub 用来统计多台设备上的 Codex token 使用量和估算成本。每台电脑运行一个无界面客户端，客户端定时扫描本机 Codex 会话日志，提取 token 记录后上报到服务端；服务端使用 SQLite 存储明细和聚合数据，并提供网页 dashboard 和 JSON API。
 
 ## 项目解决方案
 
