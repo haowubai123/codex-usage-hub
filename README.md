@@ -52,6 +52,336 @@ Windows/macOS 客户端
 - Linux 客户端前台运行可用，但服务安装命令暂未实现。
 - 成本是按服务端 `model_prices` 表估算的，不等于官方账单的最终结算值。
 
+## 使用流程总览
+
+第一次使用建议按下面顺序执行：
+
+1. 在一台机器或 VPS 上部署服务端。
+2. 设置服务端 `api_key` 和 SQLite 数据库路径。
+3. 启动服务端，并确认 `/healthz` 正常。
+4. 打开服务端首页，确认 dashboard 可以访问。
+5. 在每台需要统计的电脑上初始化客户端配置。
+6. 给每台客户端填写相同或不同的 `identity_key`。
+7. 先以前台方式运行客户端，确认能扫描并上报数据。
+8. 到网页 dashboard 查看 identity、device、model 统计是否符合预期。
+9. 确认没问题后，把客户端安装成 Windows Service 或 macOS LaunchAgent。
+10. 后续只需要维护模型价格、备份 SQLite 数据库、观察 dashboard。
+
+身份配置示例：
+
+```text
+电脑 1：identity_key = a
+电脑 2：identity_key = b
+结果：a 和 b 分开统计
+
+电脑 1：identity_key = a
+电脑 2：identity_key = a
+结果：两台电脑在 identity=a 下合并统计
+```
+
+推荐先在本机用 `localhost` 跑通完整链路，再部署到 VPS 或局域网服务器。跑通链路的判断标准是：
+
+- 服务端 `/healthz` 返回 `{"ok":true}`。
+- 客户端前台运行没有认证错误。
+- dashboard 的 Recent Events 能看到新事件。
+- Breakdown 选择 `Identity` 后，身份合并规则符合预期。
+
+## 部署流程
+
+### 部署方式选择
+
+常见部署方式有三种：
+
+| 场景 | 服务端位置 | 客户端位置 | 适合情况 |
+| --- | --- | --- | --- |
+| 本机试用 | 当前电脑 | 当前电脑 | 先验证功能是否可用 |
+| 局域网部署 | 局域网服务器或一台常开电脑 | 多台办公电脑 | 团队内网统计 |
+| 公网/VPS 部署 | VPS 或云服务器 | 任意能访问公网的设备 | 多地点、多设备统计 |
+
+服务端只需要一个实例。客户端可以有很多个，每个设备运行一个客户端。
+
+### 服务端部署步骤
+
+#### 1. 获取代码并进入项目目录
+
+```bash
+cd /path/to/codex_project
+```
+
+Windows 示例：
+
+```powershell
+cd D:\code\stock\codex_project
+```
+
+#### 2. 检查 Go 版本
+
+```bash
+go version
+```
+
+建议 Go 版本为 1.22 或更高。
+
+Windows 如果 PATH 上的 Go 版本不正确，可以直接使用 64 位 Go：
+
+```powershell
+& 'C:\Program Files\Go\bin\go.exe' version
+```
+
+#### 3. 准备服务端配置
+
+可以直接复制示例配置：
+
+```bash
+cp examples/server.yaml server.yaml
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item examples\server.yaml server.yaml
+```
+
+编辑 `server.yaml`：
+
+```yaml
+listen_addr: ":8080"
+public_base_url: http://your-server:8080
+api_key: replace-with-a-long-random-secret
+sqlite_path: ./data/codex-usage.sqlite
+```
+
+字段填写建议：
+
+- `listen_addr` 本机试用写 `127.0.0.1:8080`，允许外部访问写 `:8080`。
+- `public_base_url` 写用户浏览器能访问到的地址，例如 `http://1.2.3.4:8080`。
+- `api_key` 必须替换成强随机字符串，客户端也要填同一个值。
+- `sqlite_path` 建议放在 `./data/` 或服务器专门的数据目录。
+
+#### 4. 启动服务端
+
+开发/试用方式：
+
+```bash
+go run ./cmd/codex-usage-server serve --config ./server.yaml
+```
+
+如果想先编译二进制：
+
+```bash
+go build -o ./bin/codex-usage-server ./cmd/codex-usage-server
+./bin/codex-usage-server serve --config ./server.yaml
+```
+
+Windows PowerShell：
+
+```powershell
+go build -o .\bin\codex-usage-server.exe .\cmd\codex-usage-server
+.\bin\codex-usage-server.exe serve --config .\server.yaml
+```
+
+#### 5. 验证服务端
+
+健康检查：
+
+```bash
+curl http://localhost:8080/healthz
+```
+
+PowerShell：
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://localhost:8080/healthz
+```
+
+期望返回：
+
+```json
+{"ok":true}
+```
+
+打开 dashboard：
+
+```text
+http://localhost:8080/
+```
+
+如果部署在 VPS，则打开：
+
+```text
+http://服务器IP或域名:8080/
+```
+
+#### 6. 放行端口
+
+如果服务端要被其他电脑访问，需要放行 `listen_addr` 对应端口。
+
+Windows 防火墙需要允许入站 TCP 端口，例如 8080。
+
+Linux/VPS 常见命令示例：
+
+```bash
+sudo ufw allow 8080/tcp
+```
+
+云服务器还需要在云厂商安全组里放行同一个端口。
+
+#### 7. 生产部署建议
+
+公网部署时建议：
+
+- 使用 Nginx/Caddy 做 HTTPS 反向代理。
+- 不要把 `api_key` 写成简单字符串。
+- 定期备份 SQLite 文件。
+- 使用 systemd、Windows Service、Supervisor 或 Docker 等方式托管服务端进程。
+
+当前项目没有内置服务端 systemd 安装命令。如果需要长期运行，可以先用你熟悉的进程管理方式托管编译后的 `codex-usage-server`。
+
+### 客户端部署步骤
+
+每台需要统计的设备都要部署客户端。客户端没有界面，负责扫描本机 Codex 日志并上报。
+
+#### 1. 初始化客户端配置
+
+在客户端设备上执行：
+
+```bash
+go run ./cmd/codex-usage-client init --config ./client.config.yaml
+```
+
+Windows PowerShell：
+
+```powershell
+go run .\cmd\codex-usage-client init --config .\client.config.yaml
+```
+
+这个命令会做两件事：
+
+- 如果配置文件不存在，创建 `client.config.yaml`。
+- 创建 `state.json`，里面保存本机唯一的 `device_id`。
+
+#### 2. 编辑客户端配置
+
+```yaml
+server_url: http://your-server:8080
+api_key: replace-with-a-long-random-secret
+identity_key: a
+scan_interval: 5m
+codex_home: ""
+```
+
+字段填写规则：
+
+- `server_url` 写服务端地址，不要带 `/api/v1/ingest`，客户端会自动拼接。
+- `api_key` 必须和服务端 `api_key` 完全一致。
+- `identity_key` 是你要统计的身份名，可以是用户名、邮箱前缀、团队成员代号等。
+- `scan_interval` 建议先用 `5m`。
+- `codex_home` 留空时会读取默认 Codex 目录；如果日志不在默认目录，再手动填写。
+
+多设备配置示例：
+
+```yaml
+# 电脑 1
+identity_key: a
+
+# 电脑 2
+identity_key: a
+
+# 电脑 3
+identity_key: b
+```
+
+结果：
+
+- 电脑 1 和电脑 2 会合并到 identity `a`。
+- 电脑 3 会单独统计为 identity `b`。
+- 按 device 分组时仍然能看到三台设备分别的数据。
+
+#### 3. 确认 Codex 日志目录
+
+默认扫描：
+
+```text
+~/.codex/sessions/**/*.jsonl
+~/.codex/archived_sessions/*.jsonl
+```
+
+如果设置了环境变量 `CODEX_HOME`，客户端会优先使用它。
+
+如果需要指定目录：
+
+```yaml
+codex_home: "D:/Users/you/.codex"
+```
+
+macOS 示例：
+
+```yaml
+codex_home: "/Users/you/.codex"
+```
+
+#### 4. 前台试运行
+
+先不要急着安装后台服务，建议前台运行一次：
+
+```bash
+go run ./cmd/codex-usage-client run --config ./client.config.yaml
+```
+
+观察点：
+
+- 没有 `401` 或 `403`，说明 `api_key` 正确。
+- 没有连接失败，说明 `server_url` 可访问。
+- 服务端 dashboard 的 Recent Events 出现数据。
+- 按 Identity 分组结果符合预期。
+
+如果当前没有新的 Codex 会话日志，客户端可能暂时没有可上报事件。这不是错误，可以先使用 Codex 产生一些 session 后再观察。
+
+#### 5. 安装后台服务
+
+前台验证正常后，再安装后台服务。
+
+Windows：
+
+```bash
+go run ./cmd/codex-usage-client install-service --config ./client.config.yaml
+```
+
+卸载：
+
+```bash
+go run ./cmd/codex-usage-client uninstall-service --config ./client.config.yaml
+```
+
+macOS：
+
+```bash
+go run ./cmd/codex-usage-client install-service --config ./client.config.yaml
+```
+
+卸载：
+
+```bash
+go run ./cmd/codex-usage-client uninstall-service --config ./client.config.yaml
+```
+
+安装后：
+
+- Windows 服务名是 `codex-usage-client`。
+- macOS LaunchAgent 名称是 `com.codex-usage-client`。
+- 客户端会持续按 `scan_interval` 扫描和上报。
+
+#### 6. 验证后台运行
+
+安装服务后建议再次验证：
+
+1. 打开 dashboard。
+2. 查看 Recent Events 是否持续增加。
+3. 查看 Breakdown -> Device 是否出现这台设备。
+4. 查看 Breakdown -> Identity 是否合并到了预期身份。
+
+如果后台服务没有数据，先回到前台运行方式排查，确认配置和网络没问题后再安装服务。
+
 ## 快速开始
 
 ### 1. 准备服务端配置
